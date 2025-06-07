@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .markdown-content pre {
+            background-color: #f3f4f6;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        .markdown-content code {
+            background-color: #f3f4f6;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+        }
+        .markdown-content p {
+            margin: 0.5rem 0;
+        }
+        .markdown-content h1, .markdown-content h2, .markdown-content h3, 
+        .markdown-content h4, .markdown-content h5, .markdown-content h6 {
+            font-weight: bold;
+            margin: 1rem 0 0.5rem 0;
+        }
+        .markdown-content h1 { font-size: 1.5rem; }
+        .markdown-content h2 { font-size: 1.4rem; }
+        .markdown-content h3 { font-size: 1.3rem; }
+        .markdown-content h4 { font-size: 1.2rem; }
+        .markdown-content h5 { font-size: 1.1rem; }
+        .markdown-content h6 { font-size: 1rem; }
+        .markdown-content ul, .markdown-content ol {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+        .markdown-content ul { list-style-type: disc; }
+        .markdown-content ol { list-style-type: decimal; }
+        .markdown-content blockquote {
+            border-left: 4px solid #e5e7eb;
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #4b5563;
+        }
+        .markdown-content table {
+            border-collapse: collapse;
+            margin: 1rem 0;
+            width: 100%;
+        }
+        .markdown-content th, .markdown-content td {
+            border: 1px solid #e5e7eb;
+            padding: 0.5rem;
+        }
+        .markdown-content th {
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen">
+    <div class="container mx-auto max-w-4xl h-screen p-4">
+        <div class="bg-white rounded-lg shadow-lg h-full flex flex-col">
+            <!-- Header -->
+            <div class="bg-blue-600 text-white p-4 rounded-t-lg">
+                <h1 class="text-2xl font-bold">AI Chatbot</h1>
+            </div>
+            
+            <!-- Chat Messages -->
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-4">
+                <div class="bg-gray-100 p-3 rounded-lg max-w-[80%]">
+                    <p>Hello! How can I help you today?</p>
+                </div>
+            </div>
+            
+            <!-- Input Area -->
+            <div class="border-t p-4">
+                <form id="chat-form" class="flex gap-2">
+                    <input 
+                        type="text" 
+                        id="user-input" 
+                        class="flex-1 p-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                        placeholder="Type your message here..."
+                        required
+                    >
+                    <button 
+                        type="submit"
+                        class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        Send
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+
+        // Configure marked options
+        marked.setOptions({
+            breaks: true,  // Enable GitHub-style line breaks
+            gfm: true,     // Enable GitHub Flavored Markdown
+            sanitize: false // Allow HTML in the markdown
+        });
+
+        function appendMessage(message, isUser = false) {
+            const div = document.createElement('div');
+            div.className = `p-3 rounded-lg max-w-[80%] ${isUser ? 'bg-blue-100 ml-auto' : 'bg-gray-100'}`;
+            if (isUser) {
+                div.innerHTML = `<p>${message}</p>`;
+            } else {
+                div.classList.add('markdown-content');
+                div.innerHTML = message ? marked.parse(message) : '';
+            }
+            return div;
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            // Append user message
+            chatMessages.appendChild(appendMessage(message, true));
+            userInput.value = '';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Create response message container
+            const responseDiv = appendMessage('');
+            chatMessages.appendChild(responseDiv);
+            let fullResponse = '';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ prompt: message }),
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') break;
+
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.text) {
+                                    fullResponse += parsed.text;
+                                    responseDiv.innerHTML = marked.parse(fullResponse);
+                                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing JSON:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                responseDiv.innerHTML = '<p>Sorry, there was an error processing your request.</p>';
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+    </script>
+</body>
+</html> 
