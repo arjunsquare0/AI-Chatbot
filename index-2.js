@@ -22,7 +22,7 @@ app.post("/gemini", async (req, res) => {
   res.send(response);
 });
 
-const ai = new GoogleGenAI({ apiKey: "AIzaSyACqNHAFiaMe3L5iL9PQgT0ZCstOaOky84" });
+const ai = new GoogleGenAI({ apiKey: "googleAPIkey" });
 
 async function main(prompt) {
   try {
